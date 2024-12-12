@@ -1,26 +1,4 @@
-# SA_ConvLSTM
-
-
-
-Original Paper: [Self-Attention ConvLSTM for Spatiotemporal Prediction]( https://doi.org/10.1609/aaai.v34i07.6819)
-
-
-
-### Download Datasets
-
-##### training / validation datasets:
-
-```
-wget https://huggingface.co/spaces/chrisjay/mnist-adversarial/resolve/603879aac618aca69749a8a9172daec23a9dd2c4/files/MNIST/raw/train-images-idx3-ubyte.gz
-```
-
-##### test datasets:
-
-```shell
-wget https://www.cs.toronto.edu/~nitish/unsupervised_video/mnist_test_seq.npy
-```
-
-
+# ConvLSTM - Self Learning
 
 ### Run
 
@@ -32,7 +10,6 @@ python main.py --model sa_convlstm --batch_size 4 --lr 1e-3 --epochs 50 --num_la
 
 model selection: 
 - **convlstm**: ConvLSTM
-- **sa_convlstm**: Self-Attention (Memory) ConvLSTM
 
 ##### parsing arguments:
 
