@@ -5,7 +5,7 @@
 ##### example:
 
 ```
-python main.py --model sa_convlstm --batch_size 4 --lr 1e-3 --epochs 50 --num_layers 4 --hidden_dim 64
+python3 main.py --model convlstm --batch_size 4 --lr 1e-3 --epochs 50 --num_layers 4 --hidden_dim 64
 ```
 
 model selection: 

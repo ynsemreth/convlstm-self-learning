@@ -6,16 +6,12 @@ from tqdm import tqdm
 from utils.utils import *
 from utils.dataloader import *
 
-def load_data(args, path):
+def load_data(path):
     train_data = NPYVideoDataset(
-        root_dir=os.path.join(path, "./train"),
-        n_frames_input=args.frame_num,
-        n_frames_output=args.frame_num
+        root_dir=os.path.join(path, "train")
     )
     val_data = NPYVideoDataset(
-        root_dir=os.path.join(path, "val"),
-        n_frames_input=args.frame_num,
-        n_frames_output=args.frame_num,
+        root_dir=os.path.join(path, "val")
     )
     return train_data, val_data
 
@@ -24,34 +20,33 @@ def main(args):
     path = "./"
     best_loss = float('inf')
     lr = args.lr
-    
-    model = get_model(args)
+
+    model = get_model(args)  # `frame_num` ile ilgili bir bağımlılık olmamalı
     ckpt_path = f'./model_ckpt/{args.model}_layer{args.num_layers}_model.pth'
     ckpt_best_path = f'./model_ckpt/{args.model}_layer{args.num_layers}_best_model.pth'
-    
+
     os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
     os.makedirs(os.path.dirname(ckpt_best_path), exist_ok=True)
-    
+
     if args.reload:
         start_epoch, lr, optimizer_state_dict = load_checkpoint(model, args, ckpt_path)
-    
-    # Sadece `mps` cihazını destekle
+
     if not torch.backends.mps.is_available():
         raise RuntimeError("MPS (Metal Performance Shaders) desteklenmiyor. Apple Silicon cihazında çalıştırdığınızdan emin olun.")
 
     device = torch.device("mps")
     print(f"Using device: {device}")
     model.to(device)
-    
-    train_data, val_data = load_data(args, path)
+
+    train_data, val_data = load_data(path)
     train_loader = DataLoader(train_data, shuffle=True, batch_size=args.batch_size)
     val_loader = DataLoader(val_data, shuffle=False, batch_size=args.batch_size)
-    
+
     loss_fn = torch.nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
     if args.reload:
         optimizer.load_state_dict(optimizer_state_dict)
-        
+
     for epoch in tqdm(range(start_epoch, args.epochs + 1), position=0):
         model.train()
         tq_train = tqdm(train_loader, desc=f"Epoch {epoch}/{args.epochs}", total=len(train_loader), leave=False, position=1)
@@ -81,8 +76,9 @@ def main(args):
                 best_loss = test_loss_avg.item()
                 print(f"Epoch: {epoch}, Best loss: {best_loss:.4f}")
                 save_checkpoint(model, optimizer, epoch, ckpt_best_path)
-        
+
         save_checkpoint(model, optimizer, epoch, ckpt_path)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -94,9 +90,8 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='convlstm', help='name of the model')
     parser.add_argument('--num_layers', type=int, default=4, help='number of layers')
     parser.add_argument('--gpu_num', type=int, default=1, help='number of GPUs to use')
-    parser.add_argument('--frame_num', type=int, default=10, help='number of frames')
     parser.add_argument('--img_size', type=int, default=64, help='image size')
     parser.add_argument('--reload', action='store_true', help='reload model')
     args = parser.parse_args()
-    
+
     main(args)

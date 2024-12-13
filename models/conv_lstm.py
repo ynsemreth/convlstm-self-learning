@@ -1,26 +1,34 @@
 import torch
 import torch.nn as nn
-
-
 class ConvLSTMCell(nn.Module):
     def __init__(self, input_channels, hidden_dim):
         super(ConvLSTMCell, self).__init__()
         self.kernel_size = 3
         self.padding = 1
+        self.hidden_dim = hidden_dim
+        self.input_channels = input_channels
+
+        # Conv2d: in_channels = input_channels + hidden_dim
         self.conv = nn.Sequential(
-            nn.Conv2d(in_channels=input_channels + hidden_dim, out_channels=4 * hidden_dim, kernel_size=self.kernel_size, padding=self.padding),
-            nn.GroupNorm(4 * hidden_dim, 4 * hidden_dim)
+            nn.Conv2d(
+                in_channels=input_channels + hidden_dim,
+                out_channels=4 * hidden_dim,
+                kernel_size=self.kernel_size,
+                padding=self.padding,
+            ),
+            nn.GroupNorm(4 * hidden_dim, 4 * hidden_dim),
         )
 
     def forward(self, x, hidden):
         h, c = hidden
 
-        # Boyutların eşleşmediğini kontrol et ve gerekirse pad uygula
+        # Ensure input size matches hidden size (add padding if necessary)
         if x.size(2) != h.size(2) or x.size(3) != h.size(3):
             diff_h = h.size(2) - x.size(2)
             diff_w = h.size(3) - x.size(3)
             x = torch.nn.functional.pad(x, (0, diff_w, 0, diff_h))
 
+        # Concatenate input and hidden state along channel dimension
         conv_output = self.conv(torch.cat([x, h], dim=1))
         i, f, g, o = torch.chunk(conv_output, 4, dim=1)
 
@@ -41,36 +49,41 @@ class ConvLSTM_Model(nn.Module):
         self.batch_size = args.batch_size
         self.img_size = (args.img_size, args.img_size)
         self.n_layers = args.num_layers
-        self.frame_num = args.frame_num
         self.input_dim = args.input_dim
         self.hidden_dim = args.hidden_dim
 
         self.cells = nn.ModuleList()
         self.bns = nn.ModuleList()
 
-        # ConvLSTM Katmanlarını ve BatchNorm'ları ekle
+        # ConvLSTM Katmanlarını ekle
         for i in range(self.n_layers):
             input_dim = self.input_dim if i == 0 else self.hidden_dim
             self.cells.append(ConvLSTMCell(input_dim, self.hidden_dim))
             self.bns.append(nn.BatchNorm2d(self.hidden_dim))
 
-        self.linear_conv = nn.Conv2d(in_channels=self.hidden_dim, out_channels=self.input_dim, kernel_size=1, stride=1, padding=0)
+        self.linear_conv = nn.Conv2d(
+            in_channels=self.hidden_dim,
+            out_channels=self.input_dim,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+        )
 
     def forward(self, X, hidden=None):
         if hidden is None:
             hidden = self.init_hidden(X.size(0), self.img_size, X.device)
 
-        # Encoder: Geçmiş bilgiyi işler
+        # Encoder: Giriş sekansı boyunca çalış
         for t in range(X.size(1)):
             inputs_x = X[:, t, :, :, :]
             for i, cell in enumerate(self.cells):
                 inputs_x, hidden[i] = cell(inputs_x, hidden[i])
                 inputs_x = self.bns[i](inputs_x)
 
-        # Decoder: Tahmin üretir
+        # Decoder: Giriş sekansı boyunca tahmin üret
         predict = []
-        inputs_x = X[:, -1, :, :, :]  # Son frame'i başlangıç olarak kullan
-        for t in range(self.frame_num):
+        inputs_x = X[:, -1, :, :, :]  # Son frame başlangıç olarak kullanılır
+        for _ in range(X.size(1)):  # Giriş sekansı uzunluğu kadar tahmin üret
             for i, cell in enumerate(self.cells):
                 inputs_x, hidden[i] = cell(inputs_x, hidden[i])
                 inputs_x = self.bns[i](inputs_x)
