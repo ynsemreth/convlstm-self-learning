@@ -5,7 +5,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from utils.utils import *
 from utils.video_extract import *
-from utils.convert_npy import *
 from utils.dataloader import *
 
 def load_data():
