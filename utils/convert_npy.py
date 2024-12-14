@@ -14,8 +14,6 @@ def save_frames_as_npy(input_dir, output_dir, img_size=(64, 64)):
         video_array.append(np.array(img, dtype=np.uint8))
 
     video_array = np.stack(video_array, axis=0)
-    npy_path = os.path.join(output_dir, "train_data.npy")
+    npy_path = os.path.join(output_dir, "data.npy")
     np.save(npy_path, video_array)
     print(f"Saved: {npy_path}")
-
-save_frames_as_npy("/Users/yunusemreth/Desktop/SA_ConvLSTM/dataset/train", "./dataset/train_npy")

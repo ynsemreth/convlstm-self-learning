@@ -1,39 +1,44 @@
-import os
 import torch
 from torch.utils.data import Dataset
+from PIL import Image
+import os
 import numpy as np
 
-class NPYVideoDataset(Dataset):
-    def __init__(self, root_dir, transform=None):
-        self.root_dir = root_dir
+class ImageDataset(Dataset):
+    def __init__(self, image_folder, sequence_length=5, transform=None):
+        """
+        :param image_folder: Çerçevelerin bulunduğu klasör yolu
+        :param sequence_length: Her bir örnek için ardışık çerçeve sayısı
+        :param transform: Görseller için uygulanacak dönüşümler
+        """
+        self.image_folder = image_folder
+        self.image_files = [
+            os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.endswith(('.png', '.jpg', '.jpeg'))
+        ]
+        self.image_files.sort()  # Çerçeveleri sıralı yüklemek için
+        self.sequence_length = sequence_length
         self.transform = transform
-        self.files = sorted([os.path.join(root_dir, f) for f in os.listdir(root_dir) if f.endswith('.npy')])
+
+        if len(self.image_files) < self.sequence_length:
+            raise ValueError(f"Klasörde yeterli görüntü dosyası yok: {len(self.image_files)} mevcut, ancak {self.sequence_length} gerekiyor.")
 
     def __len__(self):
-        return len(self.files)
+        return len(self.image_files) - self.sequence_length  # Her bir ardışık çerçeve grubu bir örnek oluşturur
 
     def __getitem__(self, idx):
-        video_array = np.load(self.files[idx])
+        sequence_files = self.image_files[idx:idx + self.sequence_length + 1]
 
-        # Toplam kare sayısını kontrol et
-        total_frames = len(video_array)
-        if total_frames < 2:
-            raise ValueError(f"Video array is too short: {total_frames} frames found, at least 2 needed.")
+        # Görselleri aç ve gri tonlamaya çevir, ardından NumPy dizisine çevir
+        frames = np.array([
+            np.array(Image.open(file).convert("L"), dtype=np.float32) / 255.0 for file in sequence_files
+        ])
 
-        # Tüm kareleri dinamik olarak ayarla
-        midpoint = total_frames // 2
-        inputs = video_array[:midpoint]
-        targets = video_array[midpoint:]
+        # Giriş ve hedefi ayır
+        input_frames = frames[:-1]  # İlk n çerçeve giriş
+        target_frames = frames[1:]  # Son n çerçeve hedef
 
-        # Kanal boyutunu ekle ve tensör formatına çevir
-        inputs = inputs[..., np.newaxis]
-        targets = targets[..., np.newaxis]
+        # Tensöre çevir ve [T, C, H, W] formatına getir
+        input_frames = torch.tensor(input_frames).unsqueeze(1)  # Zaman boyutu, kanal boyutu
+        target_frames = torch.tensor(target_frames).unsqueeze(1)
 
-        inputs = torch.from_numpy(inputs).permute(0, 3, 1, 2).float() / 255.0
-        targets = torch.from_numpy(targets).permute(0, 3, 1, 2).float() / 255.0
-
-        if self.transform:
-            inputs = self.transform(inputs)
-            targets = self.transform(targets)
-
-        return inputs, targets
+        return input_frames, target_frames

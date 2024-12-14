@@ -23,7 +23,7 @@ def get_model(args):
         raise ValueError(f"Unsupported model type: {args.model}")
     
 def load_checkpoint(model, args, path):
-    checkpoint = torch.load(path, map_location=torch.device("mps"))
+    checkpoint = torch.load(path, map_location=torch.device(args.device))
     
     if not isinstance(checkpoint, dict) or 'model_state_dict' not in checkpoint:
         raise ValueError(f"Invalid checkpoint format: Missing 'model_state_dict' in {path}")
