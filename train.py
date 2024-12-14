@@ -31,7 +31,6 @@ def main(args):
     os.makedirs(os.path.dirname(ckpt_best_path), exist_ok=True)
 
     video_to_frames(args.video_dir, './dataset/train')
-    save_frames_as_npy("./dataset/train", "./train")
 
     if args.reload:
         start_epoch, lr, optimizer_state_dict = load_checkpoint(model, args, ckpt_path)
