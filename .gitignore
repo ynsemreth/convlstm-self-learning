@@ -2,3 +2,4 @@ dataset/
 model_ckpt/
 train/
 val/
+test_data/

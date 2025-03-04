@@ -3,12 +3,16 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import os
+
+from torch.utils.tensorboard import SummaryWriter
+
 from utils.utils import *
 from utils.video_extract import *
 from utils.dataloader import *
 
 def load_data():
-    train_data = ImageDataset(image_folder="./dataset/train",sequence_length=5, transform=None)
+    train_data = ImageDataset(image_folder="./dataset/train", sequence_length=5, transform=None)
     return train_data
 
 def calculate_accuracy(logits, targets):
@@ -54,6 +58,8 @@ def main(args):
     if args.reload:
         optimizer.load_state_dict(optimizer_state_dict)
 
+    writer = SummaryWriter(log_dir='./runs')
+
     for epoch in tqdm(range(start_epoch, args.epochs + 1), position=0):
         model.train()
         tq_train = tqdm(train_loader, desc=f"Epoch {epoch}/{args.epochs}", total=len(train_loader), leave=False, position=1)
@@ -77,6 +83,9 @@ def main(args):
         avg_accuracy = epoch_accuracy / len(train_loader)
         print(f"Epoch {epoch}: Train Loss = {avg_loss:.4f}, Train Accuracy = {avg_accuracy:.4f}")
 
+        writer.add_scalar("Train/Loss", avg_loss, epoch)
+        writer.add_scalar("Train/Accuracy", avg_accuracy, epoch)
+
         if epoch % 1 == 0 or epoch == 1:
             test_loss_avg = Averager()
             test_accuracy = 0.0
@@ -92,15 +101,20 @@ def main(args):
                     tq_val.set_postfix(val_loss=f'{loss.item():.03f}')
 
             avg_test_accuracy = test_accuracy / len(train_loader)
-            print(f"Epoch {epoch}: Validation Loss = {test_loss_avg.item():.4f}, Validation Accuracy = {avg_test_accuracy:.4f}")
+            val_loss = test_loss_avg.item()
+            print(f"Epoch {epoch}: Validation Loss = {val_loss:.4f}, Validation Accuracy = {avg_test_accuracy:.4f}")
 
-            if best_loss > test_loss_avg.item():
-                best_loss = test_loss_avg.item()
+            writer.add_scalar("Validation/Loss", val_loss, epoch)
+            writer.add_scalar("Validation/Accuracy", avg_test_accuracy, epoch)
+
+            if best_loss > val_loss:
+                best_loss = val_loss
                 print(f"Epoch: {epoch}, Best loss: {best_loss:.4f}")
                 save_checkpoint(model, optimizer, epoch, ckpt_best_path)
 
         save_checkpoint(model, optimizer, epoch, ckpt_path)
 
+    writer.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
