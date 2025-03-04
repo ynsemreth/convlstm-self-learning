@@ -5,7 +5,7 @@
 ##### example:
 
 ```
-python3 main.py --model convlstm --batch_size 4 --lr 1e-3 --epochs 50 --num_layers 4 --hidden_dim 64
+python3 train.py --model convlstm --batch_size 4 --lr 1e-3 --epochs 1 --num_layers 4 --hidden_dim 64 --video_dir "./train.mp4"
 ```
 
 model selection: 

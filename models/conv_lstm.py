@@ -8,7 +8,6 @@ class ConvLSTMCell(nn.Module):
         self.hidden_dim = hidden_dim
         self.input_channels = input_channels
 
-        # Conv2d: in_channels = input_channels + hidden_dim
         self.conv = nn.Sequential(
             nn.Conv2d(
                 in_channels=input_channels + hidden_dim,
@@ -22,13 +21,11 @@ class ConvLSTMCell(nn.Module):
     def forward(self, x, hidden):
         h, c = hidden
 
-        # Ensure input size matches hidden size (add padding if necessary)
         if x.size(2) != h.size(2) or x.size(3) != h.size(3):
             diff_h = h.size(2) - x.size(2)
             diff_w = h.size(3) - x.size(3)
             x = torch.nn.functional.pad(x, (0, diff_w, 0, diff_h))
 
-        # Concatenate input and hidden state along channel dimension
         conv_output = self.conv(torch.cat([x, h], dim=1))
         i, f, g, o = torch.chunk(conv_output, 4, dim=1)
 
@@ -55,7 +52,6 @@ class ConvLSTM_Model(nn.Module):
         self.cells = nn.ModuleList()
         self.bns = nn.ModuleList()
 
-        # ConvLSTM Katmanlarını ekle
         for i in range(self.n_layers):
             input_dim = self.input_dim if i == 0 else self.hidden_dim
             self.cells.append(ConvLSTMCell(input_dim, self.hidden_dim))
@@ -73,17 +69,15 @@ class ConvLSTM_Model(nn.Module):
         if hidden is None:
             hidden = self.init_hidden(X.size(0), self.img_size, X.device)
 
-        # Encoder: Giriş sekansı boyunca çalış
         for t in range(X.size(1)):
             inputs_x = X[:, t, :, :, :]
             for i, cell in enumerate(self.cells):
                 inputs_x, hidden[i] = cell(inputs_x, hidden[i])
                 inputs_x = self.bns[i](inputs_x)
 
-        # Decoder: Giriş sekansı boyunca tahmin üret
         predict = []
-        inputs_x = X[:, -1, :, :, :]  # Son frame başlangıç olarak kullanılır
-        for _ in range(X.size(1)):  # Giriş sekansı uzunluğu kadar tahmin üret
+        inputs_x = X[:, -1, :, :, :] 
+        for _ in range(X.size(1)): 
             for i, cell in enumerate(self.cells):
                 inputs_x, hidden[i] = cell(inputs_x, hidden[i])
                 inputs_x = self.bns[i](inputs_x)
