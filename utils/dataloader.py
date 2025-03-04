@@ -10,7 +10,7 @@ class ImageDataset(Dataset):
         self.image_files = [
             os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.endswith(('.png', '.jpg', '.jpeg'))
         ]
-        self.image_files.sort() 
+        self.image_files.sort()
         self.sequence_length = sequence_length
         self.transform = transform
 
@@ -24,14 +24,14 @@ class ImageDataset(Dataset):
         sequence_files = self.image_files[idx:idx + self.sequence_length + 1]
 
         frames = np.array([
-            np.array(Image.open(file).convert("L"), dtype=np.float32) / 255.0 for file in sequence_files
+            np.array(Image.open(file).convert("RGB"), dtype=np.float32) / 255.0 for file in sequence_files
         ])
 
         input_frames = frames[:-1]  
-        target_frames = frames[1:] 
+        target_frames = frames[1:]  
 
-        input_frames = torch.tensor(input_frames).unsqueeze(1)  
-        target_frames = torch.tensor(target_frames).unsqueeze(1)
+        input_frames = torch.tensor(input_frames).permute(0, 3, 1, 2)
+        target_frames = torch.tensor(target_frames).permute(0, 3, 1, 2)
 
         return input_frames, target_frames
 

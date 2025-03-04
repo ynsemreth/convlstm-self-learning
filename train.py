@@ -6,6 +6,7 @@ from tqdm import tqdm
 import os
 
 from torch.utils.tensorboard import SummaryWriter
+from torchvision.utils import make_grid
 
 from utils.utils import *
 from utils.video_extract import *
@@ -15,11 +16,19 @@ def load_data():
     train_data = ImageDataset(image_folder="./dataset/train", sequence_length=5, transform=None)
     return train_data
 
+def log_images(writer, x, y, logits, epoch):
+    x_grid = make_grid(x[0], nrow=5)
+    y_grid = make_grid(y[0], nrow=5)
+    pred_grid = make_grid(logits[0], nrow=5)
+
+    writer.add_image("Input Frames", x_grid, epoch)
+    writer.add_image("Target Frames", y_grid, epoch)
+    writer.add_image("Predicted Frames", pred_grid, epoch)
+
 def calculate_accuracy(logits, targets):
     predictions = (logits > 0.5).float()
-    correct = (predictions == targets).float().sum()
-    total = targets.numel()
-    return correct / total
+    correct_per_channel = (predictions == targets).float().mean(dim=(0, 2, 3, 4))
+    return correct_per_channel.mean()
 
 def main(args):
     start_epoch = 1
@@ -36,7 +45,12 @@ def main(args):
     video_to_frames(args.video_dir, './dataset/train')
 
     if args.reload:
-        start_epoch, lr, optimizer_state_dict = load_checkpoint(model, args, ckpt_path)
+        try:
+            start_epoch, lr, optimizer_state_dict = load_checkpoint(model, args, ckpt_path)
+            model.load_state_dict(torch.load(ckpt_path, map_location=device))
+            optimizer.load_state_dict(optimizer_state_dict)
+        except RuntimeError as e:
+            print(f"Checkpoint yükleme hatası: {e}. Yeni model başlatılıyor.")
 
     if args.device == "mps":
         if not torch.backends.mps.is_available():
@@ -94,12 +108,13 @@ def main(args):
                 tq_val = tqdm(train_loader, desc=f"Validation", total=len(train_loader), leave=False)
                 for idx, (x, y) in enumerate(tq_val):
                     x, y = x.to(device), y.to(device)
-                    logits = model(x)
+                    print(f"Model output shape: {logits.shape}")
                     loss = loss_fn(logits, y)
                     test_loss_avg.add(loss.item())
                     test_accuracy += calculate_accuracy(logits, y).item()
                     tq_val.set_postfix(val_loss=f'{loss.item():.03f}')
-
+                    
+            log_images(writer, x, y, logits, epoch)
             avg_test_accuracy = test_accuracy / len(train_loader)
             val_loss = test_loss_avg.item()
             print(f"Epoch {epoch}: Validation Loss = {val_loss:.4f}, Validation Accuracy = {avg_test_accuracy:.4f}")
@@ -122,7 +137,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=1, type=int, help='batch size')
     parser.add_argument('--epochs', type=int, default=50, help='number of epochs to train')
     parser.add_argument('--hidden_dim', type=int, default=64, help='number of hidden dim for ConvLSTM layers')
-    parser.add_argument('--input_dim', type=int, default=1, help='input channels')
+    parser.add_argument('--input_dim', type=int, default=3, help='input channels')
     parser.add_argument('--model', type=str, default='convlstm', help='name of the model')
     parser.add_argument('--num_layers', type=int, default=4, help='number of layers')
     parser.add_argument('--gpu_num', type=int, default=1, help='number of GPUs to use')
