@@ -16,7 +16,7 @@ def video_to_frames(video_path, output_folder):
         ret, frame = cap.read()
         if not ret:
             break
-        resized_frame = cv2.resize(frame, (64, 64))
+        resized_frame = cv2.resize(frame, (128, 128))
         frame_filename = os.path.join(output_folder, f"frame_{frame_count:04d}.png")
         cv2.imwrite(frame_filename, resized_frame)
         

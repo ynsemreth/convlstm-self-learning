@@ -44,6 +44,24 @@ def main(args):
 
     video_to_frames(args.video_dir, './dataset/train')
 
+    if args.device == "mps":
+        if not torch.backends.mps.is_available():
+            raise RuntimeError("MPS desteklenmiyor. Apple Silicon cihazında çalıştırdığınızdan emin olun.")
+        device = torch.device("mps")
+    elif args.device == "cpu":
+        device = torch.device("cpu")
+    else:
+        raise ValueError(f"Desteklenmeyen cihaz: {args.device}")
+
+    print(f"Using device: {device}")
+    model.to(device)
+
+    train_data = load_data()
+    train_loader = DataLoader(train_data, shuffle=True, batch_size=args.batch_size, drop_last=True)
+
+    loss_fn = torch.nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+
     if args.reload:
         try:
             start_epoch, lr, optimizer_state_dict = load_checkpoint(model, args, ckpt_path)
@@ -51,26 +69,6 @@ def main(args):
             optimizer.load_state_dict(optimizer_state_dict)
         except RuntimeError as e:
             print(f"Checkpoint yükleme hatası: {e}. Yeni model başlatılıyor.")
-
-    if args.device == "mps":
-        if not torch.backends.mps.is_available():
-            raise RuntimeError("MPS (Metal Performance Shaders) desteklenmiyor. Apple Silicon cihazında çalıştırdığınızdan emin olun.")
-        device = torch.device("mps")
-    elif args.device == "cpu":
-        device = torch.device("cpu")
-    else:
-        raise ValueError(f"Unsupported device: {args.device}")
-
-    print(f"Using device: {device}")
-    model.to(device)
-
-    train_data = load_data()
-    train_loader = DataLoader(train_data, shuffle=True, batch_size=args.batch_size)
-
-    loss_fn = torch.nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
-    if args.reload:
-        optimizer.load_state_dict(optimizer_state_dict)
 
     writer = SummaryWriter(log_dir='./runs')
 
@@ -82,8 +80,15 @@ def main(args):
         epoch_accuracy = 0.0
         for idx, (x, y) in enumerate(tq_train):
             x, y = x.to(device), y.to(device)
+
             optimizer.zero_grad()
             logits = model(x)
+
+            if logits.shape[0] != y.shape[0]:  
+                min_batch = min(logits.shape[0], y.shape[0])
+                logits = logits[:min_batch]
+                y = y[:min_batch]
+
             loss = loss_fn(logits, y)
             loss.backward()
             optimizer.step()
@@ -108,7 +113,13 @@ def main(args):
                 tq_val = tqdm(train_loader, desc=f"Validation", total=len(train_loader), leave=False)
                 for idx, (x, y) in enumerate(tq_val):
                     x, y = x.to(device), y.to(device)
-                    print(f"Model output shape: {logits.shape}")
+                    logits = model(x)
+
+                    if logits.shape[0] != y.shape[0]:  
+                        min_batch = min(logits.shape[0], y.shape[0])
+                        logits = logits[:min_batch]
+                        y = y[:min_batch]
+
                     loss = loss_fn(logits, y)
                     test_loss_avg.add(loss.item())
                     test_accuracy += calculate_accuracy(logits, y).item()
@@ -141,10 +152,11 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='convlstm', help='name of the model')
     parser.add_argument('--num_layers', type=int, default=4, help='number of layers')
     parser.add_argument('--gpu_num', type=int, default=1, help='number of GPUs to use')
-    parser.add_argument('--img_size', type=int, default=64, help='image size')
+    parser.add_argument('--img_size', type=int, default=128, help='image size')
     parser.add_argument('--reload', action='store_true', help='reload model')
     parser.add_argument('--video_dir', type=str, default='', help='root directory of the video')
-    parser.add_argument('--device', type=str, default='mps', choices=['cpu', 'mps'], help='Device to use (cpu or mps)')
+    parser.add_argument('--seq_len', type=int, default=5, help='number of frames in a sequence')
+    parser.add_argument('--device', type=str, default='cpu', choices=['cpu', 'mps'], help='Device to use (cpu or mps)')
     args = parser.parse_args()
 
     main(args)
