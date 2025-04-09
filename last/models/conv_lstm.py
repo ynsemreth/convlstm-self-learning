@@ -65,7 +65,7 @@ class ConvLSTM_Model(nn.Module):
             padding=0,
         )
 
-    def forward(self, X, hidden=None):
+    def forward(self, X, hidden=None, return_hidden=False):
         if hidden is None:
             hidden = self.init_hidden(X.size(0), self.img_size, X.device)
 
@@ -75,6 +75,10 @@ class ConvLSTM_Model(nn.Module):
                 inputs_x, hidden[i] = cell(inputs_x, hidden[i])
                 inputs_x = self.bns[i](inputs_x)
 
+        if return_hidden:
+            return inputs_x, hidden
+
+    # Prediction kısmı (örnek: video tahmini)
         predict = []
         inputs_x = X[:, -1, :, :, :] 
         for _ in range(X.size(1)): 
@@ -97,3 +101,28 @@ class ConvLSTM_Model(nn.Module):
                 torch.zeros(batch_size, self.hidden_dim, h, w, device=device)
             ))
         return states
+
+class ConvLSTM_RL_Agent(nn.Module):
+    def __init__(self, convlstm_model, num_actions):
+        super().__init__()
+        self.convlstm_model = convlstm_model
+        self.num_actions = num_actions
+
+        # Hidden'dan gelen feature map'i flatten edip aksiyon çıkaracağız.
+        feature_map_size = convlstm_model.hidden_dim * convlstm_model.img_size[0] * convlstm_model.img_size[1]
+        self.fc = nn.Linear(feature_map_size, num_actions)
+
+    def forward(self, X):
+        batch_size = X.size(0)
+
+        # ConvLSTM modelini çalıştır
+        _, hidden_states = self.convlstm_model.forward(X, return_hidden=True)  # Bunu modelde ekleyeceğiz
+
+        # Son katmanın son hidden state'i (h)
+        last_hidden = hidden_states[-1][0]  # (h, c) tuple'ından h alınır
+
+        # Flatten edip fully connected katmana ver
+        flat = last_hidden.view(batch_size, -1)
+        action_logits = self.fc(flat)
+
+        return action_logits  # DQN için Q-value, PPO için logits olarak kullanılabilir
